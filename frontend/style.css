@@ -1,0 +1,18 @@
+/* Custom CSS can go here if needed, but Tailwind handles most of it. */
+/* Example: Adding a custom scrollbar */
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #2d3748; /* gray-800 */
+}
+
+::-webkit-scrollbar-thumb {
+    background: #4a5568; /* gray-700 */
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #616e7f; /* gray-600 */
+} 

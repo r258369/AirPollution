@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Air Quality Monitor</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="bg-gray-900 text-gray-100 font-sans">
+    <div id="app" class="min-h-screen flex flex-col">
+        <!-- Header -->
+        <header class="bg-gray-800 shadow-md p-4 flex justify-between items-center">
+            <div class="flex items-center">
+                <h1 class="text-2xl font-bold text-blue-400">Air Quality Monitor</h1>
+                <p class="ml-4 text-sm text-gray-400">Real-time air quality data and forecasts • Last updated: <span id="last-updated">11:00:58 PM</span></p>
+            </div>
+            <button id="refresh-button" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-full flex items-center">
+                <i class="material-icons mr-2">refresh</i> Refresh
+            </button>
+        </header>
+
+        <!-- Alerts Section -->
+        <section id="alerts-section" class="p-4 space-y-2">
+            <!-- Health Alert (example) -->
+            <div class="bg-yellow-700 text-white p-3 rounded-lg flex justify-between items-center hidden" id="health-alert">
+                <div class="flex items-center">
+                    <i class="material-icons mr-2">warning</i>
+                    <span>Health Alert: Air quality is <span class="font-semibold">unhealthy sensitive</span> in Los Angeles</span>
+                </div>
+                <button class="text-white opacity-75 hover:opacity-100" onclick="document.getElementById('health-alert').classList.add('hidden')">
+                    <i class="material-icons">close</i>
+                </button>
+            </div>
+            <!-- Severe Alert (example) -->
+            <div class="bg-red-700 text-white p-3 rounded-lg flex justify-between items-center hidden" id="severe-alert">
+                <div class="flex items-center">
+                    <i class="material-icons mr-2">error</i>
+                    <span>Severe Alert: Air quality is <span class="font-semibold">unhealthy</span> in Houston</span>
+                </div>
+                <button class="text-white opacity-75 hover:opacity-100" onclick="document.getElementById('severe-alert').classList.add('hidden')">
+                    <i class="material-icons">close</i>
+                </button>
+            </div>
+        </section>
+
+        <!-- Main Content -->
+        <main class="flex-grow p-4 grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <!-- Left Column -->
+            <div class="lg:col-span-2 space-y-4">
+                <!-- Air Quality Map -->
+                <section class="bg-gray-800 p-4 rounded-lg shadow-md" id="air-quality-map-section">
+                    <h2 class="text-xl font-semibold mb-2 flex items-center">
+                        <i class="material-icons mr-2">travel_explore</i> Air Quality Map
+                    </h2>
+                    <p class="text-gray-400 text-sm mb-4">Real-time monitoring stations with pollution levels</p>
+                    <div id="map" class="h-96 rounded-lg"></div> <!-- Changed to id="map" and removed placeholder text -->
+                </section>
+
+                <!-- 24h Forecast -->
+                <section class="bg-gray-800 p-4 rounded-lg shadow-md" id="forecast-section">
+                    <h2 class="text-xl font-semibold mb-2">24h Forecast</h2>
+                    <p class="text-gray-400 text-sm mb-4" id="forecast-description">Select a location from Current Readings to view its 24-hour AQI forecast.</p>
+                    <div class="bg-gray-700 h-64 flex items-center justify-center rounded-lg">
+                        <canvas id="forecast-chart"></canvas>
+                    </div>
+                </section>
+            </div>
+
+            <!-- Right Column -->
+            <div class="lg:col-span-1 space-y-4">
+                <!-- Weather Conditions -->
+                <section class="bg-gray-800 p-4 rounded-lg shadow-md" id="weather-conditions-section">
+                    <h2 class="text-xl font-semibold mb-4 flex items-center">
+                        <i class="material-icons mr-2">cloud</i> Weather Conditions
+                    </h2>
+                    <div class="space-y-3">
+                        <div class="flex items-center justify-between">
+                            <span class="flex items-center"><i class="material-icons mr-2">thermostat</i> Temperature</span>
+                            <span class="font-semibold text-lg" id="weather-temperature">26°C</span>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span class="flex items-center"><i class="material-icons mr-2">air</i> Wind</span>
+                            <span class="font-semibold text-lg" id="weather-wind">9 km/h <span class="text-sm text-gray-400">SW</span></span>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span class="flex items-center"><i class="material-icons mr-2">water_drop</i> Humidity</span>
+                            <span class="font-semibold text-lg" id="weather-humidity">59%</span>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span class="flex items-center"><i class="material-icons mr-2">speed</i> Pressure</span>
+                            <span class="font-semibold text-lg" id="weather-pressure">1014 hPa</span>
+                        </div>
+                    </div>
+                    <p class="text-sm text-gray-400 mt-4 text-right">Updated: <span id="weather-last-updated">9/28/2025, 11:00:58 PM</span></p>
+                </section>
+
+                <!-- Current Readings -->
+                <section class="bg-gray-800 p-4 rounded-lg shadow-md" id="current-readings-section">
+                    <h2 class="text-xl font-semibold mb-4 flex items-center">
+                        <i class="material-icons mr-2">poll</i> Current Readings
+                    </h2>
+                    <p class="text-gray-400 text-sm mb-4">Live air quality measurements</p>
+                    <div class="space-y-3">
+                        <!-- Readings will be injected here by JavaScript -->
+                    </div>
+                </section>
+
+                <!-- Data Sources -->
+                <section class="bg-gray-800 p-4 rounded-lg shadow-md" id="data-sources-section">
+                    <h2 class="text-xl font-semibold mb-4">Data Sources</h2>
+                    <div class="space-y-2">
+                        <div class="flex justify-between items-center">
+                            <span>TEMPO Satellite</span>
+                            <span class="text-green-500 font-semibold">Active</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span>OpenAQ Stations</span>
+                            <span class="text-green-500 font-semibold">Active</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span>Open-Meteo</span>
+                            <span class="text-green-500 font-semibold">Active</span>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </main>
+    </div>
+
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script> <!-- Chart.js CDN -->
+    <script src="script.js"></script>
+</body>
+</html> 
