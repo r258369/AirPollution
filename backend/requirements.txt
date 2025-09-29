@@ -1,0 +1,12 @@
+Flask
+xarray
+rioxarray
+numpy
+pandas
+requests
+openaq
+prophet
+netCDF4
+earthaccess
+
+
