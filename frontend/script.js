@@ -1,11 +1,18 @@
 // script.js
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     const lastUpdatedSpan = document.getElementById('last-updated');
     const refreshButton = document.getElementById('refresh-button');
 
     const healthAlert = document.getElementById('health-alert');
     const severeAlert = document.getElementById('severe-alert');
+
+    const citySearchInput = document.getElementById('city-search-input');
+    const citySearchButton = document.getElementById('city-search-button');
+    const suggestionsContainer = document.getElementById('suggestions-container');
+
+    const burgerMenuButton = document.getElementById('burger-menu-button');
+    const headerNavContent = document.getElementById('header-nav-content');
 
     // Initialize Leaflet Map
     const map = L.map('map').setView([20, 0], 2); // Centered globally, zoom level 2
@@ -29,6 +36,88 @@ document.addEventListener('DOMContentLoaded', () => {
     // Initial update
     updateLastUpdatedTime();
 
+    // Burger menu toggle functionality
+    burgerMenuButton.addEventListener('click', () => {
+        headerNavContent.classList.toggle('hidden');
+    });
+
+    let debounceTimer;
+
+    citySearchInput.addEventListener('input', () => {
+        clearTimeout(debounceTimer);
+        const cityName = citySearchInput.value.trim();
+        if (cityName.length > 2) { // Start suggesting after 2 characters
+            debounceTimer = setTimeout(() => fetchCitySuggestions(cityName), 300);
+        } else {
+            suggestionsContainer.classList.add('hidden');
+        }
+    });
+
+    const fetchCitySuggestions = async (query) => {
+        try {
+            const geoResponse = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=5`);
+            const geoData = await geoResponse.json();
+            displaySuggestions(geoData);
+        } catch (error) {
+            console.error('Error fetching city suggestions:', error);
+        }
+    };
+
+    const displaySuggestions = (suggestions) => {
+        suggestionsContainer.innerHTML = '';
+        if (suggestions && suggestions.length > 0) {
+            suggestions.forEach(place => {
+                const suggestionItem = document.createElement('div');
+                suggestionItem.classList.add('p-2', 'cursor-pointer', 'hover:bg-gray-700', 'text-sm');
+                suggestionItem.textContent = place.display_name;
+                suggestionItem.addEventListener('click', () => {
+                    citySearchInput.value = place.display_name;
+                    suggestionsContainer.classList.add('hidden');
+                    // Optionally trigger search immediately
+                    citySearchButton.click();
+                });
+                suggestionsContainer.appendChild(suggestionItem);
+            });
+            suggestionsContainer.classList.remove('hidden');
+        } else {
+            suggestionsContainer.classList.add('hidden');
+        }
+    };
+
+    // Hide suggestions when clicking outside
+    document.addEventListener('click', (event) => {
+        if (!citySearchInput.contains(event.target) && !suggestionsContainer.contains(event.target)) {
+            suggestionsContainer.classList.add('hidden');
+        }
+    });
+
+    // City search functionality
+    citySearchButton.addEventListener('click', async () => {
+        const cityName = citySearchInput.value.trim();
+        if (cityName) {
+            console.log(`Searching for city: ${cityName}`);
+            try {
+                // Using OpenStreetMap Nominatim for geocoding
+                const geoResponse = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(cityName)}&format=json&limit=1`);
+                const geoData = await geoResponse.json();
+
+                if (geoData && geoData.length > 0) {
+                    const lat = parseFloat(geoData[0].lat);
+                    const lon = parseFloat(geoData[0].lon);
+                    console.log(`City found: ${cityName} at Lat: ${lat}, Lon: ${lon}`);
+                    map.setView([lat, lon], 10); // Zoom to city with zoom level 10
+                    fetchWeatherAndUpdateUI(lat, lon); // Update weather for the new city
+                } else {
+                    alert(`City not found: ${cityName}. Please try again.`);
+                    console.log(`City not found: ${cityName}`);
+                }
+            } catch (error) {
+                console.error('Error during geocoding:', error);
+                alert('Error searching for city. Please try again later.');
+            }
+        }
+    });
+
     // Refresh button functionality
     refreshButton.addEventListener('click', () => {
         console.log('Refreshing data...');
@@ -45,7 +134,7 @@ document.addEventListener('DOMContentLoaded', () => {
             console.log('Merged Data:', mergedData);
 
             // Update Weather Conditions
-            fetchWeatherAndUpateUI(); // Call separately for weather
+            await fetchWeatherAndUpdateUI(); // Call separately for weather
 
             // Update Current Readings (OpenAQ data)
             updateCurrentReadingsUI(mergedData.openaq);
@@ -87,9 +176,9 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // Function to fetch weather data separately and update UI
-    const fetchWeatherAndUpateUI = async () => {
+    const fetchWeatherAndUpdateUI = async (lat = 40.7128, lon = -74.0060) => {
         try {
-            const weatherResponse = await fetch('/api/weather');
+            const weatherResponse = await fetch(`/api/weather?lat=${lat}&lon=${lon}`);
             const weatherData = await weatherResponse.json();
             console.log('Weather Data:', weatherData);
             updateWeatherUI(weatherData);
@@ -113,6 +202,7 @@ document.addEventListener('DOMContentLoaded', () => {
         currentReadingsContainer.innerHTML = ''; // Clear existing readings
 
         if (openaqData && openaqData.length > 0) {
+            console.log("openaqData:", openaqData);
             // Group data by city
             const groupedByCity = openaqData.reduce((acc, location) => {
                 const city = location.city || 'Unknown';
@@ -149,10 +239,12 @@ document.addEventListener('DOMContentLoaded', () => {
                                 const locationName = location.location || 'N/A';
                                 const status = getAQIStatus(aqi);
                                 const statusColor = getAQIStatusColor(aqi);
+                                const latitude = location.lat ?? 'N/A';
+                                const longitude = location.lon ?? 'N/A';
 
                                 return `
                                     <div class="bg-gray-700 p-3 rounded-lg flex justify-between items-center cursor-pointer hover:bg-gray-600" 
-                                         data-city="${city}" data-location="${locationName}">
+                                         data-city="${city}" data-location="${locationName}" data-lat="${latitude}" data-lon="${longitude}">
                                         <div>
                                             <p class="font-semibold">${locationName}</p>
                                             <p class="text-sm text-gray-400">PM2.5: ${pm25Value}µg/m³</p>
@@ -187,10 +279,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Add event listeners for individual location clicks to fetch forecast
             document.querySelectorAll('.city-locations > div').forEach(locationDiv => {
-                locationDiv.addEventListener('click', (event) => {
+                locationDiv.addEventListener('click', async (event) => {
                     const city = locationDiv.dataset.city;
                     const locationName = locationDiv.dataset.location;
-                    fetchLocationForecast(city, locationName);
+                    await fetchWeatherAndUpdateUI(locationDiv.dataset.lat, locationDiv.dataset.lon);
+                    await fetchLocationForecast(city, locationName);
                 });
             });
 
@@ -442,7 +535,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Initial data fetch on page load
     fetchData();
-    fetchWeatherAndUpateUI(); // Also fetch weather on load
+    await fetchWeatherAndUpdateUI(); // Also fetch weather on load
 
     // You might want to set up an interval for refreshing data periodically
     // setInterval(fetchData, 300000); // Refresh every 5 minutes
