@@ -4,6 +4,10 @@
     width: 8px;
 }
 
+#map {
+    z-index: 1;
+}
+
 ::-webkit-scrollbar-track {
     background: #2d3748; /* gray-800 */
 }
