@@ -12,14 +12,32 @@
 <body class="bg-gray-900 text-gray-100 font-sans">
     <div id="app" class="min-h-screen flex flex-col">
         <!-- Header -->
-        <header class="bg-gray-800 shadow-md p-4 flex justify-between items-center">
-            <div class="flex items-center">
+        <header class="bg-gray-800 shadow-md p-4 flex items-center justify-between flex-wrap sticky top-0 z-50">
+            <div class="flex items-center flex-shrink-0 text-white mr-6">
                 <h1 class="text-2xl font-bold text-blue-400">Air Quality Monitor</h1>
-                <p class="ml-4 text-sm text-gray-400">Real-time air quality data and forecasts • Last updated: <span id="last-updated">11:00:58 PM</span></p>
             </div>
-            <button id="refresh-button" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-full flex items-center">
-                <i class="material-icons mr-2">refresh</i> Refresh
-            </button>
+            <div class="block lg:hidden">
+                <button id="burger-menu-button" class="flex items-center px-3 py-2 border rounded text-blue-200 border-blue-400 hover:text-white hover:border-white">
+                    <svg class="fill-current h-3 w-3" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><title>Menu</title><path d="M0 3h20v2H0V3zm0 6h20v2H0V9zm0 6h20v2H0v-2z"/></svg>
+                </button>
+            </div>
+            <nav id="header-nav-content" class="w-full flex-grow lg:flex lg:items-center lg:w-auto hidden lg:block">
+                <div class="text-sm lg:flex-grow flex items-center">
+                    <p class="block mt-4 lg:inline-block lg:mt-0 text-gray-400 mr-4">Real-time air quality data and forecasts • Last updated: <span id="last-updated">11:00:58 PM</span></p>
+                    <div class="flex mr-4 relative mt-4 lg:mt-0 lg:ml-auto">
+                        <input type="text" id="city-search-input" placeholder="Search city..." class="px-4 py-2 rounded-l-lg bg-gray-700 text-white border border-gray-600 focus:outline-none focus:border-blue-500 w-full lg:w-auto">
+                        <button id="city-search-button" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-r-lg flex items-center">
+                            <i class="material-icons">search</i>
+                        </button>
+                        <div id="suggestions-container" class="absolute mt-12 w-64 bg-gray-800 border border-gray-600 rounded-lg shadow-lg z-10 hidden"></div>
+                    </div>
+                </div>
+                <div class="mt-4 lg:mt-0">
+                    <button id="refresh-button" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-full flex items-center">
+                        <i class="material-icons mr-2">refresh</i> Refresh
+                    </button>
+                </div>
+            </nav>
         </header>
 
         <!-- Alerts Section -->
