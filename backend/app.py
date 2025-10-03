@@ -7,11 +7,26 @@ from aqi_utils import calc_aqi, PM25_BREAKPOINTS, NO2_BREAKPOINTS, CO_BREAKPOINT
 import pandas as pd
 from datetime import datetime, timedelta
 import os
+from pymongo import MongoClient
 from collections import defaultdict
 import re # Import the regex module
+from flask_apscheduler import APScheduler
 
 # static_folder path points to frontend directory relative to backend
 app = Flask(__name__, static_folder=os.path.join(os.path.dirname(__file__), '../frontend'), static_url_path='')
+scheduler = APScheduler()
+
+# connect to MongoDB
+client = MongoClient("mongodb+srv://xoro_user:luffy_xoro@cluster0.mhlehby.mongodb.net/")
+db = client["tempo_db"]   # database name
+tempoCollection = db["tempo"]  # collection name
+
+def scheduled_job():
+    print("🔹 [Scheduler] Running scheduled job to fetch and cache data")
+    merged = merge_data()
+    tempoCollection.delete_many({})  # Clear old cached data
+    tempoCollection.insert_one(merged) # cache the merged data in MongoDB
+    print("🔹 [Scheduler] Data cached successfully")
 
 # Serve index and static files
 @app.route('/')
@@ -168,9 +183,7 @@ def process_openaq_data(raw_data):
     
     return result
 
-@app.route('/api/merged')
-def api_merged():
-    print("🔹 [API] /api/merged called")
+def merge_data():
     tempo = fetch_tempo_file() or {"no2_mean":0,"no2_max":0,"no2_min":0,"lat":[],"lon":[]}
     raw_openaq = fetch_openaq_data() or []
     
@@ -184,12 +197,25 @@ def api_merged():
         if aqi_values:
             overall_aqi = max(aqi_values)
     
-    merged = {
+    return {
         "tempo": tempo, 
         "openaq": processed_openaq,
         "overall_aqi": overall_aqi,
         "raw_openaq": raw_openaq  # Keep raw data for debugging
     }
+
+@app.route('/api/merged')
+def api_merged():
+    print("🔹 [API] /api/merged called")
+
+    mongoTempData = tempoCollection.find_one({}, {'_id': 0})
+    if( mongoTempData ):
+        print("🔹 [API] Fetched TEMPO data from MongoDB")
+        return jsonify(mongoTempData) # return cached data if present  
+
+    merged = merge_data()
+
+    tempoCollection.insert_one(merged) # cache the merged data in MongoDB
     
     print(f"🔹 [API] Merged data ready (tempo: {'present' if tempo else 'none'}, processed locations: {len(processed_openaq)}, overall AQI: {overall_aqi})")
     return jsonify(merged)
@@ -197,15 +223,24 @@ def api_merged():
 @app.route('/api/weather')
 def api_weather():
     print("🔹 [API] /api/weather called")
-    data = fetch_weather(40.7128, -74.0060)
+    lat = request.args.get('lat')
+    lon = request.args.get('lon')
+    data = fetch_weather(lat, lon)
     print("🔹 [API] Weather data:", data)
     return jsonify(data)
 
 @app.route('/api/forecast')
 def api_forecast():
     print("🔹 [API] /api/forecast called")
-    openaq = fetch_openaq_data() or []
-    
+
+    openaq = []
+    mongoTempData = tempoCollection.find_one({}, {'_id': 0})
+    if (mongoTempData):
+        openaq = mongoTempData.get('raw_openaq', [])
+    else:
+        openaq = fetch_openaq_data() or []
+
+    print("bla bla bal ", openaq);
     # Get city and location from query parameters
     city_param = request.args.get('city')
     location_param = request.args.get('location')
@@ -341,5 +376,13 @@ def api_forecast():
     return jsonify(forecast_data)
 
 if __name__ == '__main__':
-    print("🚀 Starting Flask server at http://127.0.0.1:5000")
-    app.run(debug=True)
+    print("🚀 Starting Flask server at http://127.0.0.1:5001")
+    scheduler.init_app(app)
+    scheduler.add_job(
+        id="job1",
+        func=scheduled_job,
+        trigger="interval",
+        seconds=60
+    )
+    scheduler.start()
+    app.run(port=5001, debug=True)
