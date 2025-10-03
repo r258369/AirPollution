@@ -21,21 +21,31 @@
                     <svg class="fill-current h-3 w-3" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><title>Menu</title><path d="M0 3h20v2H0V3zm0 6h20v2H0V9zm0 6h20v2H0v-2z"/></svg>
                 </button>
             </div>
-            <nav id="header-nav-content" class="w-full flex-grow lg:flex lg:items-center lg:w-auto hidden lg:block">
-                <div class="text-sm lg:flex-grow flex items-center">
-                    <p class="block mt-4 lg:inline-block lg:mt-0 text-gray-400 mr-4">Real-time air quality data and forecasts • Last updated: <span id="last-updated">11:00:58 PM</span></p>
-                    <div class="flex mr-4 relative mt-4 lg:mt-0 lg:ml-auto">
-                        <input type="text" id="city-search-input" placeholder="Search city..." class="px-4 py-2 rounded-l-lg bg-gray-700 text-white border border-gray-600 focus:outline-none focus:border-blue-500 w-full lg:w-auto">
-                        <button id="city-search-button" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-r-lg flex items-center">
-                            <i class="material-icons">search</i>
-                        </button>
-                        <div id="suggestions-container" class="absolute mt-12 w-64 bg-gray-800 border border-gray-600 rounded-lg shadow-lg z-10 hidden"></div>
+            <nav id="header-nav-content" class="w-full flex-grow hidden lg:block">
+                <div class="text-sm lg:flex lg:items-center lg:justify-between">
+                    <div class="flex flex-col lg:flex-row lg:items-center">
+                        <p class="block mt-2 lg:mt-0 text-gray-400 mr-0 lg:mr-4">Real-time air quality data and forecasts • Last updated: <span id="last-updated">11:00:58 PM</span></p>
+                        <div class="flex mt-3 lg:mt-0 relative">
+                            <input type="text" id="city-search-input" placeholder="Search city..." class="px-4 py-2 rounded-l-lg bg-gray-700 text-white border border-gray-600 focus:outline-none focus:border-blue-500 w-full lg:w-auto">
+                            <button id="city-search-button" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-r-lg flex items-center">
+                                <i class="material-icons">search</i>
+                            </button>
+                            <div id="suggestions-container" class="absolute mt-12 w-64 bg-gray-800 border border-gray-600 rounded-lg shadow-lg z-10 hidden"></div>
+                        </div>
                     </div>
-                </div>
-                <div class="mt-4 lg:mt-0">
-                    <button id="refresh-button" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-full flex items-center">
-                        <i class="material-icons mr-2">refresh</i> Refresh
-                    </button>
+
+                    <div class="flex flex-col lg:flex-row lg:items-center mt-3 lg:mt-0">
+                        <div class="mb-2 lg:mb-0 lg:mr-4">
+                            <button id="refresh-button" class="w-full lg:w-auto bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-full flex items-center justify-center">
+                                <i class="material-icons mr-2">refresh</i> Refresh
+                            </button>
+                        </div>
+                        <div>
+                            <button id="login-button" class="w-full lg:w-auto bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-full flex items-center justify-center">
+                                <i class="material-icons mr-2">login</i> Login
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </nav>
         </header>
@@ -69,18 +79,21 @@
             <!-- Left Column -->
             <div class="lg:col-span-2 space-y-4">
                 <!-- Air Quality Map -->
-                <section class="bg-gray-800 p-4 rounded-lg shadow-md" id="air-quality-map-section">
+                <section class="bg-gray-800 p-4 rounded-lg shadow-md relative" id="air-quality-map-section">
                     <h2 class="text-xl font-semibold mb-2 flex items-center">
                         <i class="material-icons mr-2">travel_explore</i> Air Quality Map
                     </h2>
                     <p class="text-gray-400 text-sm mb-4">Real-time monitoring stations with pollution levels</p>
                     <div id="map" class="h-96 rounded-lg"></div> <!-- Changed to id="map" and removed placeholder text -->
+                    <button id="current-location-button" class="absolute bottom-4 left-4 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-3 rounded-full flex items-center shadow-lg">
+                        <i class="material-icons">my_location</i>
+                    </button>
                 </section>
 
                 <!-- 24h Forecast -->
                 <section class="bg-gray-800 p-4 rounded-lg shadow-md" id="forecast-section">
-                    <h2 class="text-xl font-semibold mb-2">24h Forecast</h2>
-                    <p class="text-gray-400 text-sm mb-4" id="forecast-description">Select a location from Current Readings to view its 24-hour AQI forecast.</p>
+                    <h2 class="text-xl font-semibold mb-2">AQI Forecast</h2>
+                    <p class="text-gray-400 text-sm mb-4" id="forecast-description">Select a location from Current Readings to view its AQI forecast.</p>
                     <div class="bg-gray-700 h-64 flex items-center justify-center rounded-lg">
                         <canvas id="forecast-chart"></canvas>
                     </div>
@@ -94,6 +107,8 @@
                     <h2 class="text-xl font-semibold mb-4 flex items-center">
                         <i class="material-icons mr-2">cloud</i> Weather Conditions
                     </h2>
+                    <!-- Shows which location the weather panel is displaying -->
+                    <p id="weather-location" class="text-sm text-gray-400 mb-2">Weather for: Default location</p>
                     <div class="space-y-3">
                         <div class="flex items-center justify-between">
                             <span class="flex items-center"><i class="material-icons mr-2">thermostat</i> Temperature</span>
@@ -126,6 +141,17 @@
                     </div>
                 </section>
 
+                <!-- Favourites -->
+                <section class="bg-gray-800 p-4 rounded-lg shadow-md" id="favourites-section">
+                    <h2 class="text-xl font-semibold mb-4 flex items-center">
+                        <i class="material-icons mr-2">star</i> Favourites
+                    </h2>
+                    <p class="text-gray-400 text-sm mb-4">Your saved locations for quick access</p>
+                    <div class="space-y-3">
+                        <!-- Favourite items will be injected here by JavaScript -->
+                    </div>
+                </section>
+
                 <!-- Data Sources -->
                 <section class="bg-gray-800 p-4 rounded-lg shadow-md" id="data-sources-section">
                     <h2 class="text-xl font-semibold mb-4">Data Sources</h2>
@@ -148,8 +174,54 @@
         </main>
     </div>
 
+    <!-- Login Modal -->
+    <div id="login-modal" class="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50 hidden">
+        <div class="bg-gray-800 p-8 rounded-lg shadow-xl w-full max-w-md">
+            <h2 class="text-2xl font-bold text-center text-blue-400 mb-6">Login</h2>
+            <form>
+                <div class="mb-4">
+                    <label for="login-email" class="block text-gray-400 mb-2">Email</label>
+                    <input type="email" id="login-email" class="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:border-blue-500" required>
+                </div>
+                <div class="mb-6">
+                    <label for="login-password" class="block text-gray-400 mb-2">Password</label>
+                    <input type="password" id="login-password" class="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:border-blue-500" required>
+                </div>
+                <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg">Login</button>
+            </form>
+            <p class="text-center text-gray-400 mt-4">
+                Don't have an account? <a href="#" id="show-signup" class="text-blue-400 hover:underline">Sign up</a>
+            </p>
+        </div>
+    </div>
+
+    <!-- Signup Modal -->
+    <div id="signup-modal" class="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50 hidden">
+        <div class="bg-gray-800 p-8 rounded-lg shadow-xl w-full max-w-md">
+            <h2 class="text-2xl font-bold text-center text-blue-400 mb-6">Sign Up</h2>
+            <form>
+                <div class="mb-4">
+                    <label for="signup-email" class="block text-gray-400 mb-2">Email</label>
+                    <input type="email" id="signup-email" class="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:border-blue-500" required>
+                </div>
+                <div class="mb-4">
+                    <label for="signup-password" class="block text-gray-400 mb-2">Password</label>
+                    <input type="password" id="signup-password" class="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:border-blue-500" required>
+                </div>
+                <div class="mb-6">
+                    <label for="signup-confirm-password" class="block text-gray-400 mb-2">Confirm Password</label>
+                    <input type="password" id="signup-confirm-password" class="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:border-blue-500" required>
+                </div>
+                <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg">Sign Up</button>
+            </form>
+            <p class="text-center text-gray-400 mt-4">
+                Already have an account? <a href="#" id="show-login" class="text-blue-400 hover:underline">Login</a>
+            </p>
+        </div>
+    </div>
+
     <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script> <!-- Chart.js CDN -->
     <script src="script.js"></script>
 </body>
-</html> 
+</html>
