@@ -13,6 +13,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const burgerMenuButton = document.getElementById('burger-menu-button');
     const headerNavContent = document.getElementById('header-nav-content');
+    const currentLocationButton = document.getElementById('current-location-button');
+
+    const loginButton = document.getElementById('login-button');
+    const loginModal = document.getElementById('login-modal');
+    const signupModal = document.getElementById('signup-modal');
+    const showSignup = document.getElementById('show-signup');
+    const showLogin = document.getElementById('show-login');
 
     // Initialize Leaflet Map
     const map = L.map('map').setView([20, 0], 2); // Centered globally, zoom level 2
@@ -21,11 +28,99 @@ document.addEventListener('DOMContentLoaded', async () => {
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
     }).addTo(map);
 
+    // Handle popup 'Add favourite' clicks
+    map.on('popupopen', function(e) {
+        // Find the add-fav button inside the popup
+        const popupNode = e.popup.getElement();
+        if (!popupNode) return;
+        const addBtn = popupNode.querySelector('.popup-add-fav');
+        if (addBtn) {
+            addBtn.addEventListener('click', (ev) => {
+                ev.stopPropagation();
+                // Try to extract city/location/aqi from popup content
+                const cityEl = popupNode.querySelector('p.font-semibold');
+                const locationEl = popupNode.querySelector('p.text-sm');
+                const aqiEl = popupNode.querySelector('p span.font-bold');
+                const city = cityEl ? cityEl.textContent.trim() : 'Unknown';
+                const locationName = locationEl ? locationEl.textContent.replace('Location:','').trim() : 'Unknown';
+                let aqiVal = null;
+                if (aqiEl) {
+                    // aqiEl.textContent could be like '42 (Good)'
+                    const aqiText = aqiEl.textContent.trim().split(' ')[0];
+                    aqiVal = isNaN(Number(aqiText)) ? aqiText : Number(aqiText);
+                }
+                // Use popup latlng as location coords
+                const latlng = e.popup.getLatLng();
+                const lat = latlng ? latlng.lat : null;
+                const lon = latlng ? latlng.lng : null;
+                // Add to favourites (avoid duplicates)
+                const exists = favourites.some(f => f.city === city && f.location === locationName);
+                if (!exists) {
+                    favourites.push({ city, location: locationName, lat, lon, aqi: aqiVal });
+                    renderFavourites();
+                }
+            });
+        }
+    });
+
     let markers = L.featureGroup().addTo(map);
 
     // Initialize Chart.js for 24h Forecast
     const forecastCtx = document.getElementById('forecast-chart').getContext('2d');
     let forecastChart; // Declare chart globally to be able to update it
+
+    // In-memory favourites store (could be persisted to localStorage later)
+    let favourites = [];
+
+    const renderFavourites = () => {
+        const container = document.querySelector('#favourites-section .space-y-3');
+        if (!container) return;
+        container.innerHTML = '';
+        if (favourites.length === 0) {
+            container.innerHTML = '<p class="text-gray-400">No favourites yet. Click the star on a location to add it.</p>';
+            return;
+        }
+        favourites.forEach(fav => {
+            const favHtml = document.createElement('div');
+            favHtml.className = 'bg-gray-700 p-3 rounded-lg flex justify-between items-center cursor-pointer hover:bg-gray-600';
+            favHtml.dataset.city = fav.city;
+            favHtml.dataset.location = fav.location;
+            favHtml.dataset.lat = fav.lat;
+            favHtml.dataset.lon = fav.lon;
+            const aqiVal = (fav.aqi !== null && fav.aqi !== undefined) ? fav.aqi : null;
+            const aqiText = aqiVal !== null ? aqiVal : 'N/A';
+            const statusText = (aqiVal !== null) ? getAQIStatus(aqiVal) : 'N/A';
+            const statusClass = (aqiVal !== null) ? getAQIStatusColor(aqiVal) : 'text-gray-400';
+
+            favHtml.innerHTML = `
+                <div>
+                    <p class="font-semibold">${fav.location}</p>
+                    <p class="text-sm text-gray-400">${fav.city}</p>
+                </div>
+                <div class="text-right">
+                    <p class="font-semibold text-lg">${aqiText}</p>
+                    <p class="text-sm ${statusClass}">${statusText}</p>
+                    <div class="mt-1">
+                        <button class="remove-fav text-yellow-400">Remove</button>
+                    </div>
+                </div>
+            `;
+            favHtml.querySelector('.remove-fav').addEventListener('click', (e) => {
+                e.stopPropagation();
+                favourites = favourites.filter(f => !(f.city === fav.city && f.location === fav.location));
+                renderFavourites();
+            });
+            favHtml.addEventListener('click', async () => {
+                // On click, center map and fetch weather/forecast
+                const lat = fav.lat;
+                const lon = fav.lon;
+                map.setView([lat, lon], 12);
+                await fetchWeatherAndUpdateUI(lat, lon, fav.city, fav.location);
+                await fetchLocationForecast(fav.city, fav.location);
+            });
+            container.appendChild(favHtml);
+        });
+    };
 
     // Function to update the last updated time
     const updateLastUpdatedTime = () => {
@@ -39,6 +134,44 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Burger menu toggle functionality
     burgerMenuButton.addEventListener('click', () => {
         headerNavContent.classList.toggle('hidden');
+    });
+
+    // Modal functionality
+    loginButton.addEventListener('click', () => {
+        loginModal.classList.remove('hidden');
+    });
+
+    showSignup.addEventListener('click', (e) => {
+        e.preventDefault();
+        loginModal.classList.add('hidden');
+        signupModal.classList.remove('hidden');
+    });
+
+    showLogin.addEventListener('click', (e) => {
+        e.preventDefault();
+        signupModal.classList.add('hidden');
+        loginModal.classList.remove('hidden');
+    });
+
+    // Close modals when clicking outside of them
+    loginModal.addEventListener('click', (e) => {
+        if (e.target === loginModal) {
+            loginModal.classList.add('hidden');
+        }
+    });
+
+    signupModal.addEventListener('click', (e) => {
+        if (e.target === signupModal) {
+            signupModal.classList.add('hidden');
+        }
+    });
+
+    // Current Location button functionality (USA - Kansas)
+    currentLocationButton.addEventListener('click', () => {
+        const usaCoords = [39.0119, -98.4842]; // Center of USA (Kansas)
+        const zoomLevel = 4;
+        map.setView(usaCoords, zoomLevel);
+        fetchWeatherAndUpdateUI(usaCoords[0], usaCoords[1]); // Update weather for USA center
     });
 
     let debounceTimer;
@@ -106,7 +239,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     const lon = parseFloat(geoData[0].lon);
                     console.log(`City found: ${cityName} at Lat: ${lat}, Lon: ${lon}`);
                     map.setView([lat, lon], 10); // Zoom to city with zoom level 10
-                    fetchWeatherAndUpdateUI(lat, lon); // Update weather for the new city
+                    fetchWeatherAndUpdateUI(lat, lon, cityName); // Update weather for the new city
                 } else {
                     alert(`City not found: ${cityName}. Please try again.`);
                     console.log(`City not found: ${cityName}`);
@@ -176,25 +309,93 @@ document.addEventListener('DOMContentLoaded', async () => {
     };
 
     // Function to fetch weather data separately and update UI
-    const fetchWeatherAndUpdateUI = async (lat = 40.7128, lon = -74.0060) => {
+    // Now accepts optional city and locationName so the UI can display which location the weather refers to
+    const fetchWeatherAndUpdateUI = async (lat = 40.7128, lon = -74.0060, city = null, locationName = null) => {
+        const weatherLocationEl = document.getElementById('weather-location');
         try {
+            // Update the weather location label immediately for responsiveness
+            if (city || locationName) {
+                const cityLabel = city ? city : '';
+                const locLabel = locationName ? ` — ${locationName}` : '';
+                weatherLocationEl.textContent = `Weather for: ${cityLabel}${locLabel}`;
+            } else if (lat !== undefined && lon !== undefined) {
+                weatherLocationEl.textContent = `Weather for: ${parseFloat(lat).toFixed(4)}, ${parseFloat(lon).toFixed(4)}`;
+            } else {
+                weatherLocationEl.textContent = 'Weather for: Default location';
+            }
+
             const weatherResponse = await fetch(`/api/weather?lat=${lat}&lon=${lon}`);
             const weatherData = await weatherResponse.json();
             console.log('Weather Data:', weatherData);
             updateWeatherUI(weatherData);
         } catch (error) {
             console.error('Error fetching weather data:', error);
+            // Show failed state but keep the location label so user knows what we attempted
+            if (city || locationName) {
+                const cityLabel = city ? city : '';
+                const locLabel = locationName ? ` — ${locationName}` : '';
+                weatherLocationEl.textContent = `Weather for: ${cityLabel}${locLabel} (failed)`;
+            } else if (lat !== undefined && lon !== undefined) {
+                weatherLocationEl.textContent = `Weather for: ${parseFloat(lat).toFixed(4)}, ${parseFloat(lon).toFixed(4)} (failed)`;
+            } else {
+                weatherLocationEl.textContent = 'Weather for: Default location (failed)';
+            }
         }
     };
 
     // Functions to update specific UI sections
     const updateWeatherUI = (weatherData) => {
-        // Based on backend's weather_fetch.py and app.py, it returns a dict with 'temperature', 'wind_speed', 'humidity', 'pressure'.
-        document.getElementById('weather-temperature').textContent = `${weatherData.temperature}°C`;
-        document.getElementById('weather-wind').textContent = `${weatherData.windspeed} km/h ${weatherData.winddirection}`;
-        document.getElementById('weather-humidity').textContent = `${weatherData.raw.current.relativehumidity_2m}%`;
-        document.getElementById('weather-pressure').textContent = `${weatherData.raw.current.surface_pressure} hPa`;
-        document.getElementById('weather-last-updated').textContent = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
+        // Safely extract values from backend response. Backend may return different shapes; handle both.
+        try {
+            // temperature and wind are top-level in many responses
+            const temp = weatherData.temperature ?? (weatherData.raw && weatherData.raw.temperature) ?? 'N/A';
+            const windspeed = weatherData.windspeed ?? (weatherData.raw && weatherData.raw.windspeed) ?? 'N/A';
+            const winddir = weatherData.winddirection ?? (weatherData.raw && weatherData.raw.winddirection) ?? '';
+
+            // humidity/pressure: prefer top-level if backend provided them, otherwise fall back to raw.current or hourly
+            let humidity = weatherData.humidity ?? 'N/A';
+            let pressure = weatherData.pressure ?? 'N/A';
+            if ((humidity === 'N/A' || pressure === 'N/A') && weatherData.raw) {
+                if (weatherData.raw.current) {
+                    humidity = humidity === 'N/A' ? (weatherData.raw.current.relativehumidity_2m ?? weatherData.raw.current.humidity ?? humidity) : humidity;
+                    pressure = pressure === 'N/A' ? (weatherData.raw.current.surface_pressure ?? weatherData.raw.current.pressure ?? pressure) : pressure;
+                } else if (weatherData.raw.hourly) {
+                    // attempt to read from hourly arrays (best-effort)
+                    const hourly = weatherData.raw.hourly;
+                    const times = hourly.time || [];
+                    const currentTime = weatherData.time || (weatherData.raw.current && weatherData.raw.current.time) || null;
+                    let idx = -1;
+                    if (currentTime && Array.isArray(times)) {
+                        idx = times.indexOf(currentTime);
+                        if (idx === -1) idx = times.length - 1;
+                    } else if (Array.isArray(times)) {
+                        idx = times.length - 1;
+                    }
+                    if (idx >= 0) {
+                        if (hourly.relativehumidity_2m && Array.isArray(hourly.relativehumidity_2m) && hourly.relativehumidity_2m[idx] !== undefined) {
+                            humidity = humidity === 'N/A' ? hourly.relativehumidity_2m[idx] : humidity;
+                        }
+                        if (hourly.surface_pressure && Array.isArray(hourly.surface_pressure) && hourly.surface_pressure[idx] !== undefined) {
+                            pressure = pressure === 'N/A' ? hourly.surface_pressure[idx] : pressure;
+                        }
+                    }
+                }
+            }
+
+            document.getElementById('weather-temperature').textContent = (temp !== 'N/A') ? `${temp}°C` : 'N/A';
+            document.getElementById('weather-wind').textContent = (windspeed !== 'N/A') ? `${windspeed} km/h ${winddir}` : 'N/A';
+            document.getElementById('weather-humidity').textContent = (humidity !== null && humidity !== undefined) ? `${humidity}%` : 'N/A';
+            document.getElementById('weather-pressure').textContent = (pressure !== null && pressure !== undefined) ? `${pressure} hPa` : 'N/A';
+            document.getElementById('weather-last-updated').textContent = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
+        } catch (err) {
+            console.error('Error updating weather UI with data:', weatherData, err);
+            // Display best-effort values and avoid throwing
+            document.getElementById('weather-temperature').textContent = 'N/A';
+            document.getElementById('weather-wind').textContent = 'N/A';
+            document.getElementById('weather-humidity').textContent = 'N/A';
+            document.getElementById('weather-pressure').textContent = 'N/A';
+            document.getElementById('weather-last-updated').textContent = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
+        }
     };
 
     const updateCurrentReadingsUI = (openaqData) => {
@@ -233,9 +434,13 @@ document.addEventListener('DOMContentLoaded', async () => {
                                 const sortedMeasurements = location.measurements.sort((a, b) => new Date(b.date_utc).getTime() - new Date(a.date_utc).getTime());
 
                                 const aqi = location.aqi || 'N/A';
-                                // Find the latest PM2.5 measurement after sorting
-                                const pm25Measurement = sortedMeasurements.find(m => m.parameter === 'pm25');
-                                const pm25Value = pm25Measurement ? pm25Measurement.value.toFixed(1) : 'N/A';
+                                // Choose the latest available measurement to display its parameter and value
+                                const latestMeasurement = sortedMeasurements.length > 0 ? sortedMeasurements[0] : null;
+                                const displayParam = latestMeasurement ? (latestMeasurement.parameter || '') : '';
+                                const displayUnit = latestMeasurement ? (latestMeasurement.unit || '') : '';
+                                const displayValue = latestMeasurement && latestMeasurement.value !== undefined && latestMeasurement.value !== null ? (typeof latestMeasurement.value === 'number' ? latestMeasurement.value.toFixed(1) : latestMeasurement.value) : 'N/A';
+                                const paramLabelMap = { pm25: 'PM2.5', pm10: 'PM10', no2: 'NO2', o3: 'O3', co: 'CO' };
+                                const displayLabel = paramLabelMap[displayParam] || (displayParam ? displayParam.toUpperCase() : '');
                                 const locationName = location.location || 'N/A';
                                 const status = getAQIStatus(aqi);
                                 const statusColor = getAQIStatusColor(aqi);
@@ -244,14 +449,17 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                                 return `
                                     <div class="bg-gray-700 p-3 rounded-lg flex justify-between items-center cursor-pointer hover:bg-gray-600" 
-                                         data-city="${city}" data-location="${locationName}" data-lat="${latitude}" data-lon="${longitude}">
+                                         data-city="${city}" data-location="${locationName}" data-lat="${latitude}" data-lon="${longitude}" data-aqi="${aqi}">
                                         <div>
                                             <p class="font-semibold">${locationName}</p>
-                                            <p class="text-sm text-gray-400">PM2.5: ${pm25Value}µg/m³</p>
+                                            <p class="text-sm text-gray-400">${displayLabel}: ${displayValue}${displayUnit ? ' ' + displayUnit : ''}</p>
                                         </div>
-                                        <div class="text-right">
-                                            <p class="font-semibold text-lg">${aqi}</p>
-                                            <p class="text-sm ${statusColor}">${status}</p>
+                                        <div class="text-right flex items-center space-x-3">
+                                            <div>
+                                                <p class="font-semibold text-lg">${aqi}</p>
+                                                <p class="text-sm ${statusColor}">${status}</p>
+                                            </div>
+                                            <button class="fav-toggle text-yellow-400" title="Add to favourites">${favourites.some(f => f.city === city && f.location === locationName) ? '★' : '☆'}</button>
                                         </div>
                                     </div>
                                 `;
@@ -282,8 +490,31 @@ document.addEventListener('DOMContentLoaded', async () => {
                 locationDiv.addEventListener('click', async (event) => {
                     const city = locationDiv.dataset.city;
                     const locationName = locationDiv.dataset.location;
-                    await fetchWeatherAndUpdateUI(locationDiv.dataset.lat, locationDiv.dataset.lon);
+                    await fetchWeatherAndUpdateUI(locationDiv.dataset.lat, locationDiv.dataset.lon, city, locationName);
                     await fetchLocationForecast(city, locationName);
+                });
+            });
+
+            // Attach favourite toggle handlers
+            document.querySelectorAll('.fav-toggle').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation(); // prevent triggering the parent click
+                    const parent = btn.closest('[data-city]');
+                    const city = parent.dataset.city;
+                    const locationName = parent.dataset.location;
+                    const lat = parseFloat(parent.dataset.lat);
+                    const lon = parseFloat(parent.dataset.lon);
+                    const aqiVal = parent.dataset.aqi ? (isNaN(parent.dataset.aqi) ? parent.dataset.aqi : Number(parent.dataset.aqi)) : null;
+                    // Toggle favourite presence
+                    const exists = favourites.some(f => f.city === city && f.location === locationName);
+                    if (exists) {
+                        favourites = favourites.filter(f => !(f.city === city && f.location === locationName));
+                        btn.textContent = '☆';
+                    } else {
+                        favourites.push({ city, location: locationName, lat, lon, aqi: aqiVal });
+                        btn.textContent = '★';
+                    }
+                    renderFavourites();
                 });
             });
 
@@ -351,8 +582,14 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const city = location.city || 'Unknown';
                 const aqi = location.aqi || 'N/A';
                 const dominantPollutant = location.dominant_pollutant || 'N/A';
-                const pm25Measurement = location.measurements.find(m => m.parameter === 'pm25');
-                const pm25Value = pm25Measurement ? pm25Measurement.value.toFixed(1) : 'N/A';
+                // Determine the most recent measurement for display
+                const sortedLocMeasurements = (location.measurements || []).slice().sort((a, b) => new Date(b.date_utc).getTime() - new Date(a.date_utc).getTime());
+                const latestLocMeasurement = sortedLocMeasurements.length > 0 ? sortedLocMeasurements[0] : null;
+                const locParam = latestLocMeasurement ? (latestLocMeasurement.parameter || '') : '';
+                const locUnit = latestLocMeasurement ? (latestLocMeasurement.unit || '') : '';
+                const locValue = latestLocMeasurement && latestLocMeasurement.value !== undefined && latestLocMeasurement.value !== null ? (typeof latestLocMeasurement.value === 'number' ? latestLocMeasurement.value.toFixed(1) : latestLocMeasurement.value) : 'N/A';
+                const paramLabelMap = { pm25: 'PM2.5', pm10: 'PM10', no2: 'NO2', o3: 'O3', co: 'CO' };
+                const locLabel = paramLabelMap[locParam] || (locParam ? locParam.toUpperCase() : '');
                 const status = getAQIStatus(aqi);
                 const locationName = location.location || 'N/A';
 
@@ -380,10 +617,13 @@ document.addEventListener('DOMContentLoaded', async () => {
                     marker.bindPopup(`
                         <div class="font-sans text-gray-900">
                             <p class="font-semibold text-lg">${city}</p>
-                            <p class="text-sm">Location: ${locationName}</p> <!-- Add location name here -->
+                            <p class="text-sm">Location: ${locationName}</p>
                             <p>AQI: <span class="font-bold ${getAQIStatusColor(aqi)}">${aqi} (${status})</span></p>
                             ${dominantPollutant !== 'N/A' ? `<p>Dominant Pollutant: ${dominantPollutant.toUpperCase()}</p>` : ''}
-                            ${pm25Value !== 'N/A' ? `<p>PM2.5: ${pm25Value} µg/m³</p>` : ''}
+                            ${locValue !== 'N/A' ? `<p>${locLabel}: ${locValue}${locUnit ? ' ' + locUnit : ''}</p>` : ''}
+                            <div class="mt-2">
+                                <button class="popup-add-fav bg-yellow-400 text-gray-900 py-1 px-3 rounded-md">Add favourite</button>
+                            </div>
                         </div>
                     `);
                 }
@@ -536,7 +776,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Initial data fetch on page load
     fetchData();
     await fetchWeatherAndUpdateUI(); // Also fetch weather on load
+    renderFavourites();
 
     // You might want to set up an interval for refreshing data periodically
     // setInterval(fetchData, 300000); // Refresh every 5 minutes
-}); 
+});
